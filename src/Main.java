@@ -1,6 +1,7 @@
 import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
+import org.opencv.core.Scalar;
 import org.opencv.imgcodecs.Imgcodecs;
 import org.opencv.imgproc.Imgproc;
 
@@ -11,12 +12,11 @@ import java.awt.event.KeyEvent;
 import java.awt.image.BufferedImage;
 import java.io.File;
 
+import static org.opencv.imgproc.Imgproc.rectangle;
+
 public class Main {
     public static void main(String[] args) throws Exception {
-        click(new Point(500, 1000));
-//        enter_text("api");
-        Thread.sleep(500);
-        Rect r = find("template.png", -1);
+        Rect r = find_with_mask("template.png");
         click(r.Center());
     }
 
@@ -64,6 +64,7 @@ public class Main {
         int result_rows = img.rows() - templ.rows() + 1;
         Mat result = new Mat(result_rows, result_cols, CvType.CV_32FC1);
 
+
         Imgproc.matchTemplate(img, templ, result, match_method);
         Core.MinMaxLocResult mmr = Core.minMaxLoc(result);
 
@@ -72,13 +73,37 @@ public class Main {
         if (match_method == Imgproc.TM_SQDIFF
                 || match_method == Imgproc.TM_SQDIFF_NORMED) {
             matchLoc = mmr.minLoc;
-            best_result = 1 + mmr.minVal * 1000000000;
+            best_result = 1 + mmr.minVal;
         } else {
             matchLoc = mmr.maxLoc;
             best_result = mmr.maxVal;
         }
         if (best_result < 0.9991){
-            throw new Exception("Не найдено! Лучшее совпадение:" + (mmr.maxVal * 100));
+            throw new Exception(templateFile + " Не найдено! Лучшее совпадение:" + (mmr.maxVal * 100));
+        }
+        return new Rect((int) matchLoc.x, (int) matchLoc.y, templ.cols(),  templ.rows());
+
+    }
+
+
+    public static Rect find_with_mask(String templateFile) throws Exception {
+        System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
+        saveScreen(0, 0, 1000, 1000);
+        Mat img = Imgcodecs.imread("screen.png");
+        Mat templ = Imgcodecs.imread(templateFile);
+        Mat mask = new Mat(templ.size(), CvType.CV_8UC3, new Scalar(255, 255, 255));
+        rectangle(mask, new org.opencv.core.Point(8, 9), new org.opencv.core.Point(31, 31), new Scalar(0), -1);
+
+        int result_cols = img.cols() - templ.cols() + 1;
+        int result_rows = img.rows() - templ.rows() + 1;
+        Mat result = new Mat(result_rows, result_cols, CvType.CV_32FC1);
+
+        Imgproc.matchTemplate(img, templ, result, Imgproc.TM_CCORR_NORMED, mask);
+        Core.MinMaxLocResult mmr = Core.minMaxLoc(result);
+
+        org.opencv.core.Point matchLoc = mmr.maxLoc;
+        if (mmr.maxVal < 0.9991){
+            throw new Exception(templateFile + " Не найдено! Лучшее совпадение:" + (mmr.maxVal * 100));
         }
         return new Rect((int) matchLoc.x, (int) matchLoc.y, templ.cols(),  templ.rows());
 
